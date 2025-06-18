@@ -1,74 +1,52 @@
-const util = require('util');
-const fs = require('fs-extra');
 const { zokou } = require(__dirname + "/../framework/zokou");
-const { format } = require(__dirname + "/../framework/mesfonctions");
-const os = require("os");
-const moment = require("moment-timezone");
-const path = require("path");
-const s = require(__dirname + "/../set");
 
-const more = String.fromCharCode(8206);
-const readmore = more.repeat(4001);
+const gameData = {}; // Store the random number per user
 
 zokou(
-  { nomCom: "menu11", categorie: "Menu" },
+  {
+    nomCom: "guess",
+    categorie: "Fun",
+    reaction: "🎮",
+    fromMe: false,
+  },
   async (dest, zk, commandeOptions) => {
-    let { ms, repondre, prefixe } = commandeOptions;
-    let { cm } = require(__dirname + "/../framework/zokou");
+    const { ms, repondre, prefixe, body } = commandeOptions;
+    const sender = ms.key.participant || ms.key.remoteJid;
 
-    let coms = {};
-    let mode = s.MODE.toLowerCase() !== "yes" ? "private" : "public";
+    if (body.trim().toLowerCase() === `${prefixe}guess`) {
+      const randomNumber = Math.floor(Math.random() * 5) + 1;
+      gameData[sender] = randomNumber;
 
-    cm.map((com) => {
-      if (!coms[com.categorie]) coms[com.categorie] = [];
-      coms[com.categorie].push(com.nomCom);
-    });
-
-    moment.tz.setDefault('Africa/Dar_es_Salaam');
-    const time = moment().format('HH:mm:ss');
-    const date = moment().format('YYYY-MM-DD');
-
-    let infoMsg = `
-╭━═「 *${s.BOT}* 」═━❂
-┃◆ Owner   : ${s.OWNER_NAME}
-┃◆ Prefix  : [ ${s.PREFIXE} ]
-┃◆ Mode    : *${mode}*
-┃◆ RAM     : 8/132 GB
-┃◆ Date    : *${date}*
-┃◆ Platform: ${os.platform()}
-┃◆ Commands: ${cm.length}
-┃◆ Theme   : BMB
-╰─━━━━══──══━━━❂${readmore}
-`;
-
-    let menuMsg = `🛠️ B.M.B-XMD Commands Menu:\n`;
-    for (const cat in coms) {
-      menuMsg += `\n📁 *${cat}*\n────────────────\n`;
-      for (const cmd of coms[cat]) {
-        menuMsg += `🔹 ${prefixe}${cmd}\n`;
-      }
-    }
-
-    menuMsg += `\n👑 Developed by B.M.B-XMD`;
-
-    try {
-      const imagePath = path.join(__dirname, "../bot/alive.jpg");
-      const imageBuffer = fs.readFileSync(imagePath);
-
-      await zk.sendMessage(
-        dest,
-        {
-          image: imageBuffer,
-          caption: infoMsg + menuMsg,
-          contextInfo: {
-            mentionedJid: ["120363382023564830@newsletter"]
-          }
-        },
-        { quoted: ms }
+      await repondre(
+        `🎮 *GUESS THE NUMBER GAME*\n\nChoose the correct number between *1 and 5*\n🗣 Reply with your guess (e.g., 3)`
       );
-    } catch (error) {
-      console.error("Menu error: ", error);
-      repondre("❌ Failed to load menu: " + error.message);
+      return;
     }
+
+    if (gameData[sender]) {
+      const guess = parseInt(body.trim());
+      if (isNaN(guess)) {
+        await repondre(`⚠️ Please send a number between 1 and 5 as your guess.`);
+        return;
+      }
+
+      if (guess < 1 || guess > 5) {
+        await repondre(`⚠️ Please choose a number between 1 and 5 only.`);
+        return;
+      }
+
+      const answer = gameData[sender];
+
+      if (guess === answer) {
+        await repondre(`✅ Correct! You won 🎉\nThe number was ${answer}`);
+      } else {
+        await repondre(`❌ Wrong guess. Try again.\nThe correct number was: ${answer}`);
+      }
+
+      delete gameData[sender];
+      return;
+    }
+
+    await repondre(`💡 Send *${prefixe}guess* to start the Guess The Number game.`);
   }
 );
