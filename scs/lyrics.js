@@ -66,10 +66,13 @@ bmbtz({
       if (err) console.error("Cleanup failed:", err);
     });
 
-    const successMsg = `✅ *Profile Picture Updated!*  
-👤 *User:* @${userJid.split('@')[0]}  
-🤖 *Bot:* ${s.BOT}  
-🔧 *Status:* Success`;
+    // Success message na box
+    const successMsg = `┏━━━━━━━━━━━━━━━━━━
+┃ ✅ *Profile Picture Updated!*
+┃ 👤 *User:* @${userJid.split('@')[0]}
+┃ 🤖 *Bot:* ${s.BOT}
+┃ 🔧 *Status:* Success
+┗━━━━━━━━━━━━━━━━━`;
 
     repondre(successMsg, { mentions: [userJid] });
   } catch (error) {
@@ -91,7 +94,7 @@ bmbtz({
   }
 
   try {
-    // Loading message
+    // Loading message (normal)
     await repondre(
       `🔁 *Load..... @${auteurMsgRepondu.split("@")[0]}*`,
       { mentions: [auteurMsgRepondu] }
@@ -109,11 +112,16 @@ bmbtz({
       );
     }
 
+    // Box style caption
+    const captionBox = `┏━━━━━━━━━━━━━━━━━━
+┃ 🖼️ *Profile Picture*
+┃ 👤 *User:* @${auteurMsgRepondu.split('@')[0]}
+┃ 🤖 *Bot:* ${s.BOT}
+┗━━━━━━━━━━━━━━━━━`;
+
     await zk.sendMessage(dest, {
       image: { url: ppuser },
-      caption: `🖼️ *Profile Picture*  
-👤 *User:* @${auteurMsgRepondu.split('@')[0]}  
-🤖 *Bot:* ${s.BOT}`,
+      caption: captionBox,
       mentions: [auteurMsgRepondu],
       contextInfo
     }, { quoted: quotedContact });
