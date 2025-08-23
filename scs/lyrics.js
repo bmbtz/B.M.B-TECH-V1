@@ -1,8 +1,13 @@
-const { bmbtz } = require('../devbmb/bmbtz');
-const s = require("../settings");
-const fs = require('fs');
+const { Sticker, createSticker, StickerTypes } = require('wa-sticker-formatter');
+const { bmbtz } = require("../devbmb/bmbtz");
+const { downloadMediaMessage } = require('@whiskeysockets/baileys');
+const fs = require("fs-extra");
+const ffmpeg = require("fluent-ffmpeg");
+const { Catbox } = require('node-catbox');
 
-// VCard Contact
+const catbox = new Catbox();
+
+// Quoted contact message
 const quotedContact = {
   key: {
     fromMe: false,
@@ -11,123 +16,104 @@ const quotedContact = {
   },
   message: {
     contactMessage: {
-      displayName: "B.M.B VERIFIED ✅",
-      vcard: "BEGIN:VCARD\nVERSION:3.0\nFN:B.M.B VERIFIED ✅\nORG:BMB-TECH BOT;\nTEL;type=CELL;type=VOICE;waid=254700000001:+254 700 000001\nEND:VCARD"
+      displayName: "B.M.B TECH VERIFIED ✅",
+      vcard: "BEGIN:VCARD\nVERSION:3.0\nFN:B.M.B TECH VERIFIED ✅\nORG:BMB-TECH BOT;\nTEL;type=CELL;type=VOICE;waid=255767862457:+255767862457\nEND:VCARD"
     }
   }
 };
 
-// Context ya newsletter
-const contextInfo = {
-  forwardingScore: 999,
-  isForwarded: true,
-  forwardedNewsletterMessageInfo: {
-    newsletterJid: "120363382023564830@newsletter",
-    newsletterName: "𝙱.𝙼.𝙱-𝚇𝙼𝙳",
-    serverMessageId: 1
-  }
-};
-
-// SET PROFILE PICTURE
-bmbtz({
-  nomCom: 'setpp1',
-  categorie: 'General',
-  reaction: '📸'
-}, async (dest, zk, commandeOptions) => {
-  const { ms, repondre, msgRepondu, superUser, auteurMessage, idBot } = commandeOptions;
-
-  const userJid = auteurMessage;
-  const botJid = idBot;
-  const ownerNumber = s.OWNER_NUMBER || 'default_owner_number';
-  const isOwner = userJid === `${ownerNumber}@s.whatsapp.net`;
-  const isConnectedUser = userJid === botJid;
-
-  if (!isConnectedUser && !isOwner && !superUser) {
-    return repondre("🚫 *Only the connected bot user or owner can change the profile picture!*");
-  }
-
-  if (!msgRepondu) {
-    return repondre("📸 *Please reply to an image with .settingspp to set it as your profile picture!*");
-  }
-
-  const imageMessage =
-    msgRepondu.message?.imageMessage ||
-    msgRepondu.message?.extendedTextMessage?.contextInfo?.quotedMessage?.imageMessage ||
-    msgRepondu.imageMessage || null;
-
-  if (!imageMessage) {
-    return repondre("🚫 *The replied message isn't an image!*");
-  }
-
-  try {
-    const mediaPath = await zk.downloadAndSaveMediaMessage(imageMessage);
-    await zk.updateProfilePicture(userJid, { url: mediaPath });
-    fs.unlink(mediaPath, err => {
-      if (err) console.error("Cleanup failed:", err);
-    });
-
-    // Success message na box
-    const successMsg = `┏━━━━━━━━━━━━━━━━━━
-┃ ✅ *Profile Picture Updated!*
-┃ 👤 *User:* @${userJid.split('@')[0]}
-┃ 🤖 *Bot:* ${s.BOT}
-┃ 🔧 *Status:* Success
-┗━━━━━━━━━━━━━━━━━`;
-
-    repondre(successMsg, { mentions: [userJid] });
-  } catch (error) {
-    console.error("Error updating profile picture:", error);
-    repondre(`❌ *Failed to update profile picture:* ${error.message}`);
-  }
-});
-
-// GET PROFILE PICTURE
-bmbtz({
-  nomCom: "getpp1",
-  categorie: "General",
-  reaction: "📷",
-}, async (dest, zk, commandeOptions) => {
-  const { ms, repondre, msgRepondu, auteurMsgRepondu, mybotpic } = commandeOptions;
-
-  if (!msgRepondu) {
-    return repondre(`❌ *Reply to someone's message to get their profile pic!*`);
-  }
-
-  try {
-    // Loading message (normal)
-    await repondre(
-      `🔁 *Load..... @${auteurMsgRepondu.split("@")[0]}*`,
-      { mentions: [auteurMsgRepondu] }
-    );
-
-    let ppuser;
+// Upload function
+async function uploadToCatbox(Path) {
+    if (!fs.existsSync(Path)) throw new Error("File does not exist");
     try {
-      ppuser = await zk.profilePictureUrl(auteurMsgRepondu, 'image');
-    } catch {
-      ppuser = mybotpic();
-      await repondre(
-        `🚫 *Profile picture locked or not found!*  
-🖼️ *Showing bot profile instead...*`,
-        { mentions: [auteurMsgRepondu] }
-      );
+        const response = await catbox.uploadFile({ path: Path });
+        if (response) return response;
+        else throw new Error("Error retrieving the file link");
+    } catch (err) {
+        throw new Error(String(err));
+    }
+}
+
+// Convert audio to MP3
+async function convertToMp3(inputPath, outputPath) {
+    return new Promise((resolve, reject) => {
+        ffmpeg(inputPath)
+            .toFormat("mp3")
+            .on("error", (err) => reject(err))
+            .on("end", () => resolve(outputPath))
+            .save(outputPath);
+    });
+}
+
+// URL command
+bmbtz({ nomCom: "url1", categorie: "General", reaction: "💗" }, async (origineMessage, zk, commandeOptions) => {
+    const { msgRepondu, repondre, ms, auteurMessage } = commandeOptions;
+
+    if (!msgRepondu) {
+        repondre('Please reply to an image, video, or audio file.');
+        return;
     }
 
-    // Box style caption
-    const captionBox = `┏━━━━━━━━━━━━━━━━━━
-┃ 🖼️ *Profile Picture*
-┃ 👤 *User:* @${auteurMsgRepondu.split('@')[0]}
-┃ 🤖 *Bot:* ${s.BOT}
-┗━━━━━━━━━━━━━━━━━`;
+    let mediaPath, mediaType, mediaTypeName;
 
-    await zk.sendMessage(dest, {
-      image: { url: ppuser },
-      caption: captionBox,
-      mentions: [auteurMsgRepondu],
-      contextInfo
-    }, { quoted: quotedContact });
+    if (msgRepondu.videoMessage) {
+        const videoSize = msgRepondu.videoMessage.fileLength;
+        if (videoSize > 50 * 1024 * 1024) {
+            repondre('The video is too long. Please send a smaller video.');
+            return;
+        }
+        mediaPath = await zk.downloadAndSaveMediaMessage(msgRepondu.videoMessage);
+        mediaType = 'video';
+        mediaTypeName = 'Video';
+    } else if (msgRepondu.imageMessage) {
+        mediaPath = await zk.downloadAndSaveMediaMessage(msgRepondu.imageMessage);
+        mediaType = 'image';
+        mediaTypeName = 'Image';
+    } else if (msgRepondu.audioMessage) {
+        mediaPath = await zk.downloadAndSaveMediaMessage(msgRepondu.audioMessage);
+        mediaType = 'audio';
+        mediaTypeName = 'Audio';
+        const outputPath = `${mediaPath}.mp3`;
+        try {
+            await convertToMp3(mediaPath, outputPath);
+            fs.unlinkSync(mediaPath);
+            mediaPath = outputPath;
+        } catch (error) {
+            console.error("Error converting audio to MP3:", error);
+            repondre('Failed to process the audio file.');
+            return;
+        }
+    } else {
+        repondre('Unsupported media type. Reply with an image, video, or audio file.');
+        return;
+    }
 
-  } catch (error) {
-    console.error("Error in getpp:", error);
-    await repondre(`❌ *Error while fetching profile picture:* ${error.message}`);
-  }
+    try {
+        const catboxUrl = await uploadToCatbox(mediaPath);
+        fs.unlinkSync(mediaPath);
+
+        const urlMessageBox = `🟩──[ 💀B.M.B-TECH URL ]──🟩
+📁 TYPE   : ${mediaTypeName}
+🌍 LINK   : ${catboxUrl}
+👤 USER   : ${auteurMessage.split('@')[0] || "Anonymous"}
+⏱️ TIME   : ${new Date().toLocaleString('en-GB')}
+✅ STATUS : SUCCESS`;
+
+        await zk.sendMessage(origineMessage, {
+            text: urlMessageBox,
+            contextInfo: {
+                forwardingScore: 999,
+                isForwarded: true,
+                forwardedNewsletterMessageInfo: {
+                    newsletterJid: "120363382023564830@newsletter",
+                    newsletterName: "𝙱.𝙼.𝙱-𝚇𝙼𝙳",
+                    serverMessageId: 1
+                }
+            }
+        }, { quoted: quotedContact });
+
+    } catch (error) {
+        console.error('Error while creating your URL:', error);
+        repondre('Oops, an error occurred.');
+    }
 });
