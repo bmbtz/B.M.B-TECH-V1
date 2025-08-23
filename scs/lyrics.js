@@ -1,54 +1,125 @@
-const { bmbtz } = require("../devbmb/bmbtz");
-const axios = require('axios');
-const ytSearch = require('yt-search');
-const conf = require(__dirname + '/../settings');
+const { bmbtz } = require('../devbmb/bmbtz');
+const s = require("../settings");
+const fs = require('fs');
 
-// AUDIO COMMAND (play5)
+// VCard Contact
+const quotedContact = {
+  key: {
+    fromMe: false,
+    participant: `0@s.whatsapp.net`,
+    remoteJid: "status@broadcast"
+  },
+  message: {
+    contactMessage: {
+      displayName: "B.M.B VERIFIED ✅",
+      vcard: "BEGIN:VCARD\nVERSION:3.0\nFN:B.M.B VERIFIED ✅\nORG:BMB-TECH BOT;\nTEL;type=CELL;type=VOICE;waid=254700000001:+254 700 000001\nEND:VCARD"
+    }
+  }
+};
+
+// Context ya newsletter
+const contextInfo = {
+  forwardingScore: 999,
+  isForwarded: true,
+  forwardedNewsletterMessageInfo: {
+    newsletterJid: "120363382023564830@newsletter",
+    newsletterName: "𝙱.𝙼.𝙱-𝚇𝙼𝙳",
+    serverMessageId: 1
+  }
+};
+
+// SET PROFILE PICTURE
 bmbtz({
-  nomCom: "play5",
-  aliases: ["song2", "playdoc2", "audio2", "3mp3"],
-  categorie: "Search",
-  reaction: "🎧"
-}, async (dest, zk, commandOptions) => {
-  const { arg, ms, repondre } = commandOptions;
-  if (!arg[0]) return repondre("Please provide a video name.");
+  nomCom: 'setpp1',
+  categorie: 'General',
+  reaction: '📸'
+}, async (dest, zk, commandeOptions) => {
+  const { ms, repondre, msgRepondu, superUser, auteurMessage, idBot } = commandeOptions;
 
-  const query = arg.join(" ");
+  const userJid = auteurMessage;
+  const botJid = idBot;
+  const ownerNumber = s.OWNER_NUMBER || 'default_owner_number';
+  const isOwner = userJid === `${ownerNumber}@s.whatsapp.net`;
+  const isConnectedUser = userJid === botJid;
+
+  if (!isConnectedUser && !isOwner && !superUser) {
+    return repondre("🚫 *Only the connected bot user or owner can change the profile picture!*");
+  }
+
+  if (!msgRepondu) {
+    return repondre("📸 *Please reply to an image with .settingspp to set it as your profile picture!*");
+  }
+
+  const imageMessage =
+    msgRepondu.message?.imageMessage ||
+    msgRepondu.message?.extendedTextMessage?.contextInfo?.quotedMessage?.imageMessage ||
+    msgRepondu.imageMessage || null;
+
+  if (!imageMessage) {
+    return repondre("🚫 *The replied message isn't an image!*");
+  }
 
   try {
-    const searchResults = await ytSearch(query);
-    if (!searchResults || !searchResults.videos.length) {
-      return repondre('No video found for the specified query.');
+    const mediaPath = await zk.downloadAndSaveMediaMessage(imageMessage);
+    await zk.updateProfilePicture(userJid, { url: mediaPath });
+    fs.unlink(mediaPath, err => {
+      if (err) console.error("Cleanup failed:", err);
+    });
+
+    const successMsg = `✅ *Profile Picture Updated!*  
+👤 *User:* @${userJid.split('@')[0]}  
+🤖 *Bot:* ${s.BOT}  
+🔧 *Status:* Success`;
+
+    repondre(successMsg, { mentions: [userJid] });
+  } catch (error) {
+    console.error("Error updating profile picture:", error);
+    repondre(`❌ *Failed to update profile picture:* ${error.message}`);
+  }
+});
+
+// GET PROFILE PICTURE
+bmbtz({
+  nomCom: "getpp1",
+  categorie: "General",
+  reaction: "📷",
+}, async (dest, zk, commandeOptions) => {
+  const { ms, repondre, msgRepondu, auteurMsgRepondu, mybotpic } = commandeOptions;
+
+  if (!msgRepondu) {
+    return repondre(`❌ *Reply to someone's message to get their profile pic!*`);
+  }
+
+  try {
+    // Loading message
+    await repondre(
+      `🔁 *Load..... @${auteurMsgRepondu.split("@")[0]}*`,
+      { mentions: [auteurMsgRepondu] }
+    );
+
+    let ppuser;
+    try {
+      ppuser = await zk.profilePictureUrl(auteurMsgRepondu, 'image');
+    } catch {
+      ppuser = mybotpic();
+      await repondre(
+        `🚫 *Profile picture locked or not found!*  
+🖼️ *Showing bot profile instead...*`,
+        { mentions: [auteurMsgRepondu] }
+      );
     }
-
-    const video = searchResults.videos[0];
-    const api = `https://api.delirius.store/download/ytmp3?url=${encodeURIComponent(video.url)}`;
-    const { data } = await axios.get(api);
-
-    if (!data?.result?.downloadUrl) {
-      return repondre("Failed to retrieve download link.");
-    }
-
-    const downloadUrl = data.result.downloadUrl;
 
     await zk.sendMessage(dest, {
-      audio: { url: downloadUrl },
-      mimetype: 'audio/mpeg',
-      contextInfo: {
-        externalAdReply: {
-          title: video.title,
-          body: video.title,
-          mediaType: 1,
-          sourceUrl: conf.GURL,
-          thumbnailUrl: video.thumbnail,
-          renderLargerThumbnail: true,
-          showAdAttribution: true,
-        }
-      }
-    }, { quoted: ms });
+      image: { url: ppuser },
+      caption: `🖼️ *Profile Picture*  
+👤 *User:* @${auteurMsgRepondu.split('@')[0]}  
+🤖 *Bot:* ${s.BOT}`,
+      mentions: [auteurMsgRepondu],
+      contextInfo
+    }, { quoted: quotedContact });
 
   } catch (error) {
-    console.error('Error:', error);
-    return repondre(`❌ Download failed: ${error.message}`);
+    console.error("Error in getpp:", error);
+    await repondre(`❌ *Error while fetching profile picture:* ${error.message}`);
   }
 });
