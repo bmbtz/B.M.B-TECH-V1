@@ -1,20 +1,69 @@
-'use strict';
+const { bmbtz } = require("../devbmb/bmbtz");
+const axios = require("axios");
 
-const axios = require('axios');
+bmbtz({
+  nomCom: "lyrics",
+  reaction: '🎵', // Changed reaction to match music theme
+  categorie: "Music",
+  aliases: ["lyric", "mistari"] // Added aliases
+}, async (dest, zk, commandeOptions) => {
+  const { repondre, arg, ms } = commandeOptions;
+  const songName = arg.join(" ").trim();
 
-const scriptName = 'lyrics.js';
-const scriptUrl = `https://developer-b-m-b-tech-bot.vercel.app/${scriptName}`;
+  if (!songName) {
+    return repondre("Please provide a song name. Example: *" + s.PREFIXE + "lyrics Shape of You*");
+  }
 
-async function loadScript() {
+  // API endpoints (same as original)
+  const apis = [
+    `https://iamtkm.vercel.app/search/lyrics?q=${encodeURIComponent(songName)}`,
+    `https://www.dark-yasiya-api.site/other/lyrics?text=${encodeURIComponent(songName)}`,
+    `https://api.davidcyriltech.my.id/lyrics?title=${encodeURIComponent(songName)}`
+  ];
+
+  let lyricsData;
+  for (const api of apis) {
     try {
-        const response = await axios.get(scriptUrl);
-        const scriptContent = response.data;
-
-        console.log(`✅ ${scriptName} fetched and loaded successfully!`);
-        eval(scriptContent);
+      const response = await axios.get(api);
+      if (response.data?.result?.lyrics) {
+        lyricsData = response.data;
+        break;
+      }
     } catch (error) {
-        console.error(`❌ Error loading ${scriptName}:`, error.message);
+      console.error(`API ${api} failed:`, error.message);
     }
-}
+  }
 
-loadScript();
+  if (!lyricsData?.result) {
+    return repondre("❌ Couldn't find lyrics for *" + songName + "*");
+  }
+
+  const { title, artist, thumb, lyrics } = lyricsData.result;
+  const imageUrl = thumb || "https://files.catbox.moe/rpea5k.jpg"; // Fallback image
+
+  try {
+    // Download album art
+    const imageResponse = await axios.get(imageUrl, { responseType: "arraybuffer" });
+    
+    await zk.sendMessage(dest, {
+      image: Buffer.from(imageResponse.data),
+      caption: `🎶 *${title}* - ${artist}\n\n${lyrics}\n\n*Powered by B.M.B-TECH*`,
+      contextInfo: {
+        externalAdReply: {
+          title: "B.M.B-TECH Lyrics Finder",
+          body: "Get any song lyrics instantly",
+          thumbnail: await (await axios.get(imageUrl, { responseType: "arraybuffer" })).data,
+          mediaType: 1,
+          mediaUrl: "",
+          sourceUrl: ""
+        }
+      }
+    }, { quoted: ms });
+
+  } catch (error) {
+    console.error("Error sending lyrics:", error);
+    // Fallback to text-only
+    repondre(`🎶 *${title}* - ${artist}\n\n${lyrics.substring(0, 2000)}...\n\n*[Truncated - image failed to load]*`);
+  }
+});
+        
