@@ -22,7 +22,7 @@ bmbtz({
     }
 
     const video = searchResults.videos[0];
-    const api = `https://iamtkm.vercel.app/downloaders/ytmp3?url=${encodeURIComponent(video.url)}`;
+    const api = `https://api.delirius.store/download/ytmp3?url=${encodeURIComponent(video.url)}`;
     const { data } = await axios.get(api);
 
     if (!data?.result?.downloadUrl) {
