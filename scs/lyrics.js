@@ -1,66 +1,54 @@
 const { bmbtz } = require("../devbmb/bmbtz");
-const axios = require("axios");
+const axios = require('axios');
+const ytSearch = require('yt-search');
+const conf = require(__dirname + '/../settings');
 
+// AUDIO COMMAND (play5)
 bmbtz({
-  nomCom: "iyrics",
-  reaction: '🎵',
-  categorie: "Music",
-  aliases: ["lyric", "mistari"]
-}, async (dest, zk, commandeOptions) => {
-  const { repondre, arg, ms } = commandeOptions;
-  const songName = arg.join(" ").trim();
+  nomCom: "play5",
+  aliases: ["song2", "playdoc2", "audio2", "3mp3"],
+  categorie: "Search",
+  reaction: "🎧"
+}, async (dest, zk, commandOptions) => {
+  const { arg, ms, repondre } = commandOptions;
+  if (!arg[0]) return repondre("Please provide a video name.");
 
-  if (!songName) {
-    return repondre("Please provide a song name. Example: *.lyrics Shape of You*");
-  }
-
-  const apis = [
-    `https://iamtkm.vercel.app/search/lyrics?q=${encodeURIComponent(songName)}`,
-    `https://www.dark-yasiya-api.site/other/lyrics?text=${encodeURIComponent(songName)}`,
-    `https://api.davidcyriltech.my.id/lyrics?title=${encodeURIComponent(songName)}`
-  ];
-
-  let lyricsData;
-  for (const api of apis) {
-    try {
-      const response = await axios.get(api);
-      if (response.data?.result?.lyrics) {
-        lyricsData = response.data;
-        break;
-      }
-    } catch (error) {
-      console.error(`API ${api} failed:`, error.message);
-    }
-  }
-
-  if (!lyricsData?.result) {
-    return repondre("❌ Couldn't find lyrics for *" + songName + "*");
-  }
-
-  const { title, artist, thumb, lyrics } = lyricsData.result;
-  const imageUrl = thumb || "https://files.catbox.moe/rpea5k.jpg";
+  const query = arg.join(" ");
 
   try {
-    const imageResponse = await axios.get(imageUrl, { responseType: "arraybuffer" });
-    const imgBuffer = Buffer.from(imageResponse.data);
+    const searchResults = await ytSearch(query);
+    if (!searchResults || !searchResults.videos.length) {
+      return repondre('No video found for the specified query.');
+    }
+
+    const video = searchResults.videos[0];
+    const api = `https://iamtkm.vercel.app/downloaders/ytmp3?url=${encodeURIComponent(video.url)}`;
+    const { data } = await axios.get(api);
+
+    if (!data?.result?.downloadUrl) {
+      return repondre("Failed to retrieve download link.");
+    }
+
+    const downloadUrl = data.result.downloadUrl;
 
     await zk.sendMessage(dest, {
-      image: imgBuffer,
-      caption: `🎶 *${title}* - ${artist}\n\n${lyrics.substring(0, 3500)}\n\n*Powered by B.M.B-TECH*`,
+      audio: { url: downloadUrl },
+      mimetype: 'audio/mpeg',
       contextInfo: {
         externalAdReply: {
-          title: "B.M.B-TECH Lyrics Finder",
-          body: "Get any song lyrics instantly",
-          thumbnail: imgBuffer,
+          title: video.title,
+          body: video.title,
           mediaType: 1,
-          mediaUrl: "",
-          sourceUrl: ""
+          sourceUrl: conf.GURL,
+          thumbnailUrl: video.thumbnail,
+          renderLargerThumbnail: true,
+          showAdAttribution: true,
         }
       }
     }, { quoted: ms });
 
   } catch (error) {
-    console.error("Error sending lyrics:", error);
-    repondre(`🎶 *${title}* - ${artist}\n\n${lyrics.substring(0, 2000)}...\n\n*[Truncated - image failed to load]*`);
+    console.error('Error:', error);
+    return repondre(`❌ Download failed: ${error.message}`);
   }
 });
