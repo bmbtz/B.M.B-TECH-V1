@@ -2,19 +2,18 @@ const { bmbtz } = require("../devbmb/bmbtz");
 const axios = require("axios");
 
 bmbtz({
-  nomCom: "lyrics",
-  reaction: '🎵', // Changed reaction to match music theme
+  nomCom: "iyrics",
+  reaction: '🎵',
   categorie: "Music",
-  aliases: ["lyric", "mistari"] // Added aliases
+  aliases: ["lyric", "mistari"]
 }, async (dest, zk, commandeOptions) => {
   const { repondre, arg, ms } = commandeOptions;
   const songName = arg.join(" ").trim();
 
   if (!songName) {
-    return repondre("Please provide a song name. Example: *" + s.PREFIXE + "lyrics Shape of You*");
+    return repondre("Please provide a song name. Example: *.lyrics Shape of You*");
   }
 
-  // API endpoints (same as original)
   const apis = [
     `https://iamtkm.vercel.app/search/lyrics?q=${encodeURIComponent(songName)}`,
     `https://www.dark-yasiya-api.site/other/lyrics?text=${encodeURIComponent(songName)}`,
@@ -39,20 +38,20 @@ bmbtz({
   }
 
   const { title, artist, thumb, lyrics } = lyricsData.result;
-  const imageUrl = thumb || "https://files.catbox.moe/rpea5k.jpg"; // Fallback image
+  const imageUrl = thumb || "https://files.catbox.moe/rpea5k.jpg";
 
   try {
-    // Download album art
     const imageResponse = await axios.get(imageUrl, { responseType: "arraybuffer" });
-    
+    const imgBuffer = Buffer.from(imageResponse.data);
+
     await zk.sendMessage(dest, {
-      image: Buffer.from(imageResponse.data),
-      caption: `🎶 *${title}* - ${artist}\n\n${lyrics}\n\n*Powered by B.M.B-TECH*`,
+      image: imgBuffer,
+      caption: `🎶 *${title}* - ${artist}\n\n${lyrics.substring(0, 3500)}\n\n*Powered by B.M.B-TECH*`,
       contextInfo: {
         externalAdReply: {
           title: "B.M.B-TECH Lyrics Finder",
           body: "Get any song lyrics instantly",
-          thumbnail: await (await axios.get(imageUrl, { responseType: "arraybuffer" })).data,
+          thumbnail: imgBuffer,
           mediaType: 1,
           mediaUrl: "",
           sourceUrl: ""
@@ -62,8 +61,6 @@ bmbtz({
 
   } catch (error) {
     console.error("Error sending lyrics:", error);
-    // Fallback to text-only
     repondre(`🎶 *${title}* - ${artist}\n\n${lyrics.substring(0, 2000)}...\n\n*[Truncated - image failed to load]*`);
   }
 });
-        
